@@ -1,60 +1,24 @@
 #pragma once
 
 #include "bmi_definitions.h"
-#include "vector.h"
 #include "Wire.h"
-
+#include "vector.h"
 // Thanks to Seed studio for their library which this is influenced by
 // https://github.com/Seeed-Studio/Grove_6Axis_Accelerometer_And_Gyroscope_BMI088/blob/master/BMI088.h
 
 
-namespace internal{
-
-    template <typename T>
-    void read(T bus, uint8_t addr, uint8_t reg, uint8_t* buf, uint16_t len) {
-        bus->beginTransmission(addr);
-        bus->write(reg);
-        bus->endTransmission();
-
-        bus->requestFrom(addr, len);
-        while (bus->available()) {
-            for (uint16_t i = 0; i < len; i ++) {
-                buf[i] = bus->read();
-            }
-        }
-    }
-
-    template <typename T>
-    static int writeByte(T bus, uint8_t addr, uint8_t reg, uint8_t data){
-        bus->beginTransmission(addr);
-        bus->write(reg);
-        bus->write(data);
-        auto sad = bus->endTransmission();
-        return sad;
-    }
-
-    template <typename T>
-    static uint8_t readByte(T bus, uint8_t addr, uint8_t reg){
-        bus->beginTransmission(addr);
-        bus->write(reg);
-        bus->endTransmission();
-
-        bus->requestFrom((uint8_t)addr, (uint8_t)1);
-        return bus->read();
-    }
-
-}
 
 
 struct Imu{
 
     float accRange = 0.0f;
     float gyroRange = 0.0f;
-    Wire* internal_bus = nullptr;
+    TwoWire* internal_bus = nullptr;
     bool use_alt = false;
     uint8_t acc_addr = 0;
     uint8_t gyro_addr = 0;
-    Imu(bool use_alt = false, Wire bus = Wire) : bus(bus) use_alt(use_alt) {
+
+    Imu(TwoWire* bus, bool use_alt = false) : internal_bus(bus), use_alt(use_alt) {
         if(use_alt){
             acc_addr = BMI088_ACC_ALT_ADDRESS;
             gyro_addr = BMI088_GYRO_ALT_ADDRESS;
@@ -84,35 +48,35 @@ struct Imu{
         } else if (range == RANGE_24G) {
             accRange = 24.0f * BMI088_G_CONST;
         }
-        auto check = internal::writeByte(&internal_bus,acc_addr, BMI088_ACC_RANGE, (uint8_t)range);
-        assert(check != 0,"INIT OF ONBOARD IMU FAILED");
+        auto check = writeByte(acc_addr, BMI088_ACC_RANGE, (uint8_t)range);
+        //assert(check != 0,"INIT OF ONBOARD IMU FAILED");
     }
 
     void resetAcc(void) {
-        internal::writeByte(&internal_bus,acc_addr, BMI088_ACC_SOFT_RESET, 0xB6);
+        writeByte(acc_addr, BMI088_ACC_SOFT_RESET, 0xB6);
     }
 
     void resetGyro(void) {
-        internal::writeByte(&internal_bus,gyro_addr, BMI088_GYRO_SOFT_RESET, 0xB6);
+        writeByte(gyro_addr, BMI088_GYRO_SOFT_RESET, 0xB6);
     }
 
     void setAccPoweMode(acc_power_type_t mode) {
         if (mode == ACC_ACTIVE) {
-            internal::writeByte(&internal_bus,acc_addr, BMI088_ACC_PWR_CTRl, 0x04);
-            internal::writeByte(&internal_bus,acc_addr, BMI088_ACC_PWR_CONF, 0x00);
+            writeByte(acc_addr, BMI088_ACC_PWR_CTRl, 0x04);
+            writeByte(acc_addr, BMI088_ACC_PWR_CONF, 0x00);
         } else if (mode == ACC_SUSPEND) {
-            internal::writeByte(&internal_bus,acc_addr, BMI088_ACC_PWR_CONF, 0x03);
-            internal::writeByte(&internal_bus,acc_addr, BMI088_ACC_PWR_CTRl, 0x00);
+            writeByte(acc_addr, BMI088_ACC_PWR_CONF, 0x03);
+            writeByte(acc_addr, BMI088_ACC_PWR_CTRl, 0x00);
         }
     }
 
     void setGyroPoweMode(gyro_power_type_t mode) {
         if (mode == GYRO_NORMAL) {
-            internal::writeByte(&internal_bus, gyro_addr, BMI088_GYRO_LPM_1, (uint8_t)GYRO_NORMAL);
+            writeByte( gyro_addr, BMI088_GYRO_LPM_1, (uint8_t)GYRO_NORMAL);
         } else if (mode == GYRO_SUSPEND) {
-            internal::writeByte(&internal_bus, gyro_addr, BMI088_GYRO_LPM_1, (uint8_t)GYRO_SUSPEND);
+            writeByte( gyro_addr, BMI088_GYRO_LPM_1, (uint8_t)GYRO_SUSPEND);
         } else if (mode == GYRO_DEEP_SUSPEND) {
-            internal::writeByte(&internal_bus, gyro_addr, BMI088_GYRO_LPM_1, (uint8_t)GYRO_DEEP_SUSPEND);
+            writeByte( gyro_addr, BMI088_GYRO_LPM_1, (uint8_t)GYRO_DEEP_SUSPEND);
         }
     }
 
@@ -120,11 +84,11 @@ struct Imu{
     void setAccOutputDataRate(acc_odr_type_t odr) {
         uint8_t data = 0;
 
-        data = internal::readByte(&internal_bus,acc_addr, BMI088_ACC_CONF);
+        data = readByte(acc_addr, BMI088_ACC_CONF);
         data = data & 0xf0;
         data = data | (uint8_t)odr;
 
-        internal::writeByte(&internal_bus,acc_addr, BMI088_ACC_CONF, data);
+        writeByte(acc_addr, BMI088_ACC_CONF, data);
     }
 
     void setGyroScaleRange(gyro_scale_type_t range) {
@@ -140,12 +104,12 @@ struct Imu{
             gyroRange = 125;
         }
 
-        internal::writeByte(&internal_bus,gyro_addr, BMI088_GYRO_RANGE, (uint8_t)range);
+        writeByte(gyro_addr, BMI088_GYRO_RANGE, (uint8_t)range);
 
     }
 
     void setGyroOutputDataRate(gyro_odr_type_t odr) {
-        internal::writeByte(&internal_bus,gyro_addr, BMI088_GYRO_BAND_WIDTH, (uint8_t)odr);
+        writeByte(gyro_addr, BMI088_GYRO_BAND_WIDTH, (uint8_t)odr);
         }
 
     Vec getGyro(){
@@ -154,7 +118,7 @@ struct Imu{
         uint16_t gx = 0, gy = 0, gz = 0;
         float value = 0;
 
-        internal::read(&internal_bus,gyro_addr, BMI088_GYRO_RATE_X_LSB, buf, 6);
+        read(gyro_addr, BMI088_GYRO_RATE_X_LSB, buf, 6);
 
         gx = buf[0] | (buf[1] << 8);
         gy = buf[2] | (buf[3] << 8);
@@ -177,7 +141,7 @@ struct Imu{
         uint16_t ax = 0, ay = 0, az = 0;
         float value = 0;
 
-        internal::read(&internal_bus,acc_addr, BMI088_ACC_X_LSB, buf, 6);
+        read(acc_addr, BMI088_ACC_X_LSB, buf, 6);
 
         ax = buf[0] | (buf[1] << 8);
         ay = buf[2] | (buf[3] << 8);
@@ -193,4 +157,37 @@ struct Imu{
         out.z = accRange * value / 32767;
         return out;
     }
+
+
+    void read(uint8_t addr, uint8_t reg, uint8_t* buf, uint16_t len) {
+        internal_bus->beginTransmission(addr);
+        internal_bus->write(reg);
+        internal_bus->endTransmission();
+
+        internal_bus->requestFrom(addr, len);
+        while (internal_bus->available()) {
+            for (uint16_t i = 0; i < len; i ++) {
+                buf[i] = internal_bus->read();
+            }
+        }
+    }
+
+    int writeByte(uint8_t addr, uint8_t reg, uint8_t data){
+        internal_bus->beginTransmission(addr);
+        internal_bus->write(reg);
+        internal_bus->write(data);
+        auto sad = internal_bus->endTransmission();
+        return sad;
+    }
+
+    uint8_t readByte(uint8_t addr, uint8_t reg){
+        internal_bus->beginTransmission(addr);
+        internal_bus->write(reg);
+        internal_bus->endTransmission();
+
+        internal_bus->requestFrom((uint8_t)addr, (uint8_t)1);
+        return internal_bus->read();
+    }
+
+
 };
